@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Base.Theme.YourApplicationName" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Existing color definitions -->
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/teal_200</item>
+        <item name="colorSecondaryVariant">@color/teal_700</item>
+        <item name="colorOnSecondary">@color/black</item>
+
+        <!-- 1. Make the status bar transparent -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+
+        <!-- 2. Make the navigation bar transparent (Optional, but recommended for consistency) -->
+        <!-- You can keep this or remove it if you only want the status bar transparent -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+
+        <!-- 3. Adjust Status Bar Icon Color based on your background -->
+        <!--    IMPORTANT: You need to decide based on your @drawable/qin background -->
+
+        <!--    Option A: If your background (@drawable/qin) is DARK (like a dark blue sky) -->
+        <!--    Use this line to make status bar icons LIGHT (white) -->
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+
+        <!--    Option B: If your background (@drawable/qin) is LIGHT (like a light blue or white) -->
+        <!--    Use this line INSTEAD of the one above to make status bar icons DARK -->
+        <!-- <item name="android:windowLightStatusBar" tools:targetApi="m">true</item> -->
+
+
+        <!--
+            ****************************************************************************
+            ** IMPORTANT: Additional Code Required in Your Activity! **
+            ****************************************************************************
+            Setting the status bar color to transparent in the theme is only step 1.
+            You ALSO need to tell your Activity's window that it can draw behind the status bar.
+
+            In your MainActivity.java (or any Activity using this theme), add this line
+            in the onCreate() method, AFTER super.onCreate() and setContentView():
+
+            import androidx.core.view.WindowCompat;
+            // ... inside onCreate() ...
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+            Furthermore, you will likely need to add padding or margin to the top of your
+            main content layout (e.g., the RelativeLayout inside your NestedScrollView)
+            or specifically to your top elements (like the "地区" TextView) to prevent
+            them from being drawn underneath the status bar icons (time, battery etc.).
+            This is done by listening for WindowInsets.
+            ****************************************************************************
+        -->
+
+    </style>
+
+    <!-- Final application theme -->
+    <style name="Theme.YourApplicationName" parent="Base.Theme.YourApplicationName" />
+
+</resources>
