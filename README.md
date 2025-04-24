@@ -20,7 +20,6 @@
 *   **Android SDK**
 *   **编程语言:** Java
 *   **天气数据源:** 和风天气 Android SDK (QWeather SDK V4.20 或附近版本)
-*   **定位服务:** Google Play Services - FusedLocationProviderClient
 *   **JSON 解析:** Gson (用于解析内置的省市数据)
 *   **UI 组件:**
     *   AndroidX AppCompat, SwipeRefreshLayout, RelativeLayout, LinearLayout, NestedScrollView, HorizontalScrollView
