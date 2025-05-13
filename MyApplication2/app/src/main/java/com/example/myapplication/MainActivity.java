@@ -2,38 +2,41 @@ package com.example.myapplication;
 
 import android.content.Context;
 import android.content.res.Resources;
-import android.graphics.Color; // Make sure Color is imported
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.AttributeSet; // Needed for WeeklyChartView constructor if inflating from XML in code
 import android.util.Log;
 import android.view.Gravity;
-import android.view.View; // Import View
+import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.annotation.Nullable; // Import Nullable
+
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.view.ViewCompat; // For Insets later if needed
+import androidx.core.graphics.ColorUtils;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat; // For Insets later if needed
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-
-// Import the custom view
-import com.example.myapplication.WeeklyChartView; // Adjust package if needed
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import com.qweather.sdk.bean.air.AirNowBean;
 import com.qweather.sdk.bean.base.Code;
+import com.qweather.sdk.bean.base.Lang;
+import com.qweather.sdk.bean.warning.WarningBean;
 import com.qweather.sdk.bean.weather.WeatherDailyBean;
 import com.qweather.sdk.bean.weather.WeatherHourlyBean;
 import com.qweather.sdk.bean.weather.WeatherNowBean;
@@ -62,8 +65,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private SwipeRefreshLayout swipeRefreshLayout;
-
-    // --- UI Controls ---
     TextView textView1, textView2, textView3, textView4, textView5;
     TextView textView_xq1, textView_xq2, textView_xq3, textView_xq4, textView_xq5, textView_xq6, textView_xq7;
     TextView textView_rq1, textView_rq2, textView_rq3, textView_rq4, textView_rq5, textView_rq6, textView_rq7;
@@ -71,84 +72,67 @@ public class MainActivity extends AppCompatActivity {
     TextView textView_time, textView_diq;
     ImageView ivCurrentWeatherIcon;
     ImageView ivForecastIcon1, ivForecastIcon2, ivForecastIcon3, ivForecastIcon4, ivForecastIcon5, ivForecastIcon6, ivForecastIcon7;
-
-    // --- Custom Chart View ---
-    private WeeklyChartView weeklyChartView; // Member variable for the custom chart
-
-    // --- Data ---
+    TextView tvAqiValue, tvAqiCategory;
+    TextView tvNoAlerts, tvAlertTitle, tvAlertText;
+    LinearLayout llAirQuality, llWeatherAlerts;
+    TextView expandButton;
+    LinearLayout expandedDays;
+    Button collapseButton;
+    private com.example.myapplication.WeeklyChartView weeklyChartView;
     private Map<String, Map<String, String>> provinceAndCityMap;
     private String currentLocationId = "101250304";
     private String currentLocationName = "株洲县";
-
-    // --- Async & Timers ---
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Timer timer;
     private final AtomicInteger pendingApiCallCount = new AtomicInteger(0);
-    private static final int TOTAL_REFRESH_API_CALLS = 3;
+    private static final int TOTAL_REFRESH_API_CALLS = 5;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Set window flags for transparent status bar BEFORE setting content view
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-
         setContentView(R.layout.activity_main);
-
-        // Initialize all views, including the custom chart
         initViews();
         initProvinceAndCityData();
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout);
         setupSwipeRefresh();
         setupQWeatherSDK();
-        textView_diq.setOnClickListener(v -> showProvinceSelection());
+        if (textView_diq != null) {
+            textView_diq.setOnClickListener(v -> showProvinceSelection());
+        }
         startTimeDisplay();
         initialWeatherLoad();
 
-        // Optional: Handle Insets to add padding below status bar
-        // setupInsets();
-    }
+        if (expandButton != null && expandedDays != null && collapseButton != null) {
+            expandButton.setOnClickListener(v -> {
+                if (expandedDays.getVisibility() == View.GONE) {
+                    Animation slideIn = AnimationUtils.loadAnimation(this, R.drawable.slide_in); // Make sure R.drawable.slide_in is correct, should be R.anim.slide_in
+                    expandedDays.setVisibility(View.VISIBLE);
+                    expandedDays.startAnimation(slideIn);
+                    expandButton.setVisibility(View.GONE);
+                    collapseButton.setVisibility(View.VISIBLE);
+                }
+            });
 
-    /*
-    // Optional method to handle insets and apply padding dynamically
-    private void setupInsets() {
-        View rootView = findViewById(android.R.id.content); // Or your main container ID
-        if (rootView != null) {
-            ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-                InsetsCompat insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-
-                // Apply top padding to your main content container (e.g., the RelativeLayout)
-                // to avoid overlapping with the status bar
-                View contentContainer = findViewById(R.id.your_main_content_container_id); // Replace with actual ID
-                 if (contentContainer != null) {
-                     contentContainer.setPadding(contentContainer.getPaddingLeft(),
-                                                 insets.top, // Use status bar height as top padding
-                                                 contentContainer.getPaddingRight(),
-                                                 contentContainer.getPaddingBottom());
-                 }
-
-                // Apply bottom padding if you also made the navigation bar transparent
-                // if (contentContainer != null) {
-                //     contentContainer.setPadding(contentContainer.getPaddingLeft(),
-                //                                 insets.top,
-                //                                 contentContainer.getPaddingRight(),
-                //                                 insets.bottom); // Use navigation bar height as bottom padding
-                // }
-
-
-                // Consume the insets so lower views don't also react (usually)
-                // return WindowInsetsCompat.CONSUMED;
-                 // Or return original insets if other views need them
-                 return windowInsets;
+            collapseButton.setOnClickListener(v -> {
+                Animation slideOut = AnimationUtils.loadAnimation(this, R.drawable.slide_out); // Make sure R.drawable.slide_out is correct, should be R.anim.slide_out
+                slideOut.setAnimationListener(new Animation.AnimationListener() {
+                    @Override
+                    public void onAnimationEnd(Animation animation) {
+                        expandedDays.setVisibility(View.GONE);
+                        collapseButton.setVisibility(View.GONE);
+                        expandButton.setVisibility(View.VISIBLE);
+                    }
+                    @Override
+                    public void onAnimationStart(Animation animation) {}
+                    @Override
+                    public void onAnimationRepeat(Animation animation) {}
+                });
+                expandedDays.startAnimation(slideOut);
             });
         }
     }
-    */
 
-
-    /**
-     * Initialize all views, including the custom chart.
-     */
     private void initViews() {
         textView1 = findViewById(R.id.tv_weather);
         textView2 = findViewById(R.id.tv_temperature);
@@ -156,178 +140,229 @@ public class MainActivity extends AppCompatActivity {
         textView4 = findViewById(R.id.text_4);
         textView5 = findViewById(R.id.tempMax_1);
         ivCurrentWeatherIcon = findViewById(R.id.iv_current_weather_icon);
-        textView_xq1 = findViewById(R.id.weilaitq_1);
-        textView_xq2 = findViewById(R.id.weilaitq_2);
-        textView_xq3 = findViewById(R.id.weilaitq_3);
-        textView_xq4 = findViewById(R.id.weilaitq_4);
-        textView_xq5 = findViewById(R.id.weilaitq_5);
-        textView_xq6 = findViewById(R.id.weilaitq_6);
-        textView_xq7 = findViewById(R.id.weilaitq_7);
         textView_time = findViewById(R.id.Chinatime);
         textView_diq = findViewById(R.id.diqu_1);
-        textView_rq1 = findViewById(R.id.left_week1);
-        textView_rq2 = findViewById(R.id.left_week2);
-        textView_rq3 = findViewById(R.id.left_week3);
-        textView_rq4 = findViewById(R.id.left_week4);
-        textView_rq5 = findViewById(R.id.left_week5);
-        textView_rq6 = findViewById(R.id.left_week6);
-        textView_rq7 = findViewById(R.id.left_week7);
-        textView_gdi1 = findViewById(R.id.right_week1);
-        textView_gdi2 = findViewById(R.id.right_week2);
-        textView_gdi3 = findViewById(R.id.right_week3);
-        textView_gdi4 = findViewById(R.id.right_week4);
-        textView_gdi5 = findViewById(R.id.right_week5);
-        textView_gdi6 = findViewById(R.id.right_week6);
-        textView_gdi7 = findViewById(R.id.right_week7);
-        ivForecastIcon1 = findViewById(R.id.iv_forecast_icon_1);
-        ivForecastIcon2 = findViewById(R.id.iv_forecast_icon_2);
-        ivForecastIcon3 = findViewById(R.id.iv_forecast_icon_3);
-        ivForecastIcon4 = findViewById(R.id.iv_forecast_icon_4);
-        ivForecastIcon5 = findViewById(R.id.iv_forecast_icon_5);
-        ivForecastIcon6 = findViewById(R.id.iv_forecast_icon_6);
-        ivForecastIcon7 = findViewById(R.id.iv_forecast_icon_7);
 
-        // --- Initialize the custom chart view ---
-        weeklyChartView = findViewById(R.id.weekly_chart_view); // Use the ID from XML
-    }
+        TextView[] temp_textView_rq_array = new TextView[7];
+        ImageView[] temp_ivForecastIcon_array = new ImageView[7];
+        TextView[] temp_textView_xq_array = new TextView[7];
+        TextView[] temp_textView_gdi_array = new TextView[7];
 
-    /**
-     * Update UI for daily forecast, including passing data to the chart.
-     * @param dailyList List of daily forecast data.
-     */
-    private void updateDailyForecastUI(List<WeatherDailyBean.DailyBean> dailyList) {
-        if (dailyList == null || dailyList.isEmpty()) {
-            clearForecastViews(); // Clear views and chart if data is invalid
-            return;
+        View forecastDay1_view = findViewById(R.id.forecast_day_1_include);
+        View forecastDay2_view = findViewById(R.id.forecast_day_2_include);
+        View forecastDay3_view = findViewById(R.id.forecast_day_3_include);
+        View forecastDay4_view = findViewById(R.id.forecast_day_4_include);
+        View forecastDay5_view = findViewById(R.id.forecast_day_5_include);
+        View forecastDay6_view = findViewById(R.id.forecast_day_6_include);
+        View forecastDay7_view = findViewById(R.id.forecast_day_7_include);
+
+        View[] forecastDayViews_array = {
+                forecastDay1_view, forecastDay2_view, forecastDay3_view,
+                forecastDay4_view, forecastDay5_view, forecastDay6_view, forecastDay7_view
+        };
+
+        for (int i = 0; i < 7; i++) {
+            if (forecastDayViews_array[i] != null) {
+                temp_textView_rq_array[i] = forecastDayViews_array[i].findViewById(R.id.left_week_template);
+                temp_ivForecastIcon_array[i] = forecastDayViews_array[i].findViewById(R.id.iv_forecast_icon_template);
+                temp_textView_xq_array[i] = forecastDayViews_array[i].findViewById(R.id.weilaitq_template);
+                temp_textView_gdi_array[i] = forecastDayViews_array[i].findViewById(R.id.right_week_template);
+            } else {
+                Log.e(TAG, "Forecast day view container " + (i + 1) + " (R.id.forecast_day_" + (i + 1) + "_include) is null in initViews!");
+            }
         }
 
-        // Update today's high/low temp
+        textView_rq1 = temp_textView_rq_array[0]; textView_rq2 = temp_textView_rq_array[1]; textView_rq3 = temp_textView_rq_array[2];
+        textView_rq4 = temp_textView_rq_array[3]; textView_rq5 = temp_textView_rq_array[4]; textView_rq6 = temp_textView_rq_array[5];
+        textView_rq7 = temp_textView_rq_array[6];
+
+        ivForecastIcon1 = temp_ivForecastIcon_array[0]; ivForecastIcon2 = temp_ivForecastIcon_array[1]; ivForecastIcon3 = temp_ivForecastIcon_array[2];
+        ivForecastIcon4 = temp_ivForecastIcon_array[3]; ivForecastIcon5 = temp_ivForecastIcon_array[4]; ivForecastIcon6 = temp_ivForecastIcon_array[5];
+        ivForecastIcon7 = temp_ivForecastIcon_array[6];
+
+        textView_xq1 = temp_textView_xq_array[0]; textView_xq2 = temp_textView_xq_array[1]; textView_xq3 = temp_textView_xq_array[2];
+        textView_xq4 = temp_textView_xq_array[3]; textView_xq5 = temp_textView_xq_array[4]; textView_xq6 = temp_textView_xq_array[5];
+        textView_xq7 = temp_textView_xq_array[6];
+
+        textView_gdi1 = temp_textView_gdi_array[0]; textView_gdi2 = temp_textView_gdi_array[1]; textView_gdi3 = temp_textView_gdi_array[2];
+        textView_gdi4 = temp_textView_gdi_array[3]; textView_gdi5 = temp_textView_gdi_array[4]; textView_gdi6 = temp_textView_gdi_array[5];
+        textView_gdi7 = temp_textView_gdi_array[6];
+
+        weeklyChartView = findViewById(R.id.weekly_chart_view);
+        tvAqiValue = findViewById(R.id.tv_aqi_value);
+        tvAqiCategory = findViewById(R.id.tv_aqi_category);
+        tvNoAlerts = findViewById(R.id.tv_no_alerts);
+        tvAlertTitle = findViewById(R.id.tv_alert_title);
+        tvAlertText = findViewById(R.id.tv_alert_text);
+        llAirQuality = findViewById(R.id.ll_air_quality);
+        llWeatherAlerts = findViewById(R.id.ll_weather_alerts);
+        expandButton = findViewById(R.id.expand_button);
+        expandedDays = findViewById(R.id.ll_expanded_days);
+
+        if (expandButton != null && expandedDays != null) {
+            collapseButton = new Button(this);
+            collapseButton.setText("收起");
+            collapseButton.setTextColor(ContextCompat.getColor(this, R.color.teal_200));
+            collapseButton.setBackgroundResource(android.R.color.transparent);
+            collapseButton.setVisibility(View.GONE);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            params.setMargins(0, dpToPx(8), 0, dpToPx(8));
+            expandedDays.addView(collapseButton, 0, params);
+        } else {
+            Log.e(TAG, "expandButton or expandedDays is null, cannot add collapseButton.");
+        }
+    }
+
+
+    private void updateAirQualityUI(@Nullable AirNowBean.NowBean airData) {
+        if (tvAqiValue == null || tvAqiCategory == null || llAirQuality == null) return;
+
+        if (airData != null) {
+            tvAqiValue.setText("AQI " + (airData.getAqi() != null ? airData.getAqi() : "--"));
+            String category = airData.getCategory() != null ? airData.getCategory() : "未知";
+            tvAqiCategory.setText(category);
+
+            int backgroundColor = getAqiBackgroundColor(category);
+            Drawable mutatedBackground = ContextCompat.getDrawable(this, R.drawable.edittext);
+            if (mutatedBackground != null) {
+                GradientDrawable background = (GradientDrawable) mutatedBackground.mutate();
+                background.setColor(ColorUtils.setAlphaComponent(backgroundColor, 180));
+                llAirQuality.setBackground(background);
+            } else {
+                llAirQuality.setBackgroundColor(backgroundColor);
+            }
+
+        } else {
+            tvAqiValue.setText("AQI --");
+            tvAqiCategory.setText("获取失败");
+            llAirQuality.setBackgroundResource(R.drawable.edittext);
+        }
+    }
+
+    private int getAqiBackgroundColor(String category) {
+        int color = ContextCompat.getColor(this, R.color.aqi_default);
+        if (category == null) return color;
+        if (category.contains("优")) {
+            color = ContextCompat.getColor(this, R.color.aqi_good);
+        } else if (category.contains("良")) {
+            color = ContextCompat.getColor(this, R.color.aqi_moderate);
+        } else if (category.contains("轻度污染")) {
+            color = ContextCompat.getColor(this, R.color.aqi_unhealthy_sensitive);
+        } else if (category.contains("中度污染")) {
+            color = ContextCompat.getColor(this, R.color.aqi_unhealthy);
+        } else if (category.contains("重度污染")) {
+            color = ContextCompat.getColor(this, R.color.aqi_very_unhealthy);
+        } else if (category.contains("严重污染")) {
+            color = ContextCompat.getColor(this, R.color.aqi_hazardous);
+        }
+        return color;
+    }
+
+    private void updateDailyForecastUI(List<WeatherDailyBean.DailyBean> dailyList) {
+        if (dailyList == null || dailyList.isEmpty()) {
+            clearForecastViews();
+            return;
+        }
         WeatherDailyBean.DailyBean today = dailyList.get(0);
         final String tempMax = today.getTempMax() + "°";
         final String tempMin = today.getTempMin() + "°";
-        textView5.setText(tempMax + "/" + tempMin);
+        if (textView5 != null) textView5.setText(tempMax + "/" + tempMin);
 
-        // Prepare UI arrays
         ImageView[] forecastIcons = {ivForecastIcon1, ivForecastIcon2, ivForecastIcon3, ivForecastIcon4, ivForecastIcon5, ivForecastIcon6, ivForecastIcon7};
         TextView[] dateTextViews = {textView_rq1, textView_rq2, textView_rq3, textView_rq4, textView_rq5, textView_rq6, textView_rq7};
         TextView[] weatherTextViews = {textView_xq1, textView_xq2, textView_xq3, textView_xq4, textView_xq5, textView_xq6, textView_xq7};
         TextView[] tempTextViews = {textView_gdi1, textView_gdi2, textView_gdi3, textView_gdi4, textView_gdi5, textView_gdi6, textView_gdi7};
 
-        int daysToDisplay = Math.min(dailyList.size(), 7); // Calculate actual days to display
-
-        // Update forecast list items
+        int daysToDisplay = Math.min(dailyList.size(), 7);
         for (int i = 0; i < daysToDisplay; i++) {
+            if (dateTextViews[i] == null || weatherTextViews[i] == null || tempTextViews[i] == null || forecastIcons[i] == null) {
+                Log.w(TAG, "Skipping update for forecast day " + (i+1) + " due to null view reference.");
+                continue;
+            }
+
             WeatherDailyBean.DailyBean dailyBean = dailyList.get(i);
             String fxDate = dailyBean.getFxDate();
             String formattedDate;
             String weekDay;
-
             try {
                 SimpleDateFormat sdfInput = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA);
                 Date date = sdfInput.parse(fxDate);
                 SimpleDateFormat sdfOutput = new SimpleDateFormat("MM-dd", Locale.CHINA);
                 formattedDate = sdfOutput.format(date);
-                weekDay = getWeekDayFromDate(date); // Use helper for weekday
+                weekDay = getWeekDayFromDate(date);
             } catch (Exception e) {
                 Log.e(TAG, "Error parsing forecast date: " + fxDate, e);
-                formattedDate = fxDate; // Fallback
-                weekDay = "日期";     // Fallback
+                formattedDate = fxDate;
+                weekDay = "日期";
             }
-
-            String dateText = weekDay + "\n" + formattedDate; // Weekday and date on separate lines
+            String dateText = weekDay + "\n" + formattedDate;
             String weatherText = dailyBean.getTextDay();
             String highLowText = dailyBean.getTempMax() + "°/" + dailyBean.getTempMin() + "°";
             int forecastIconResId = getWeatherIconResource(weatherText);
 
-            // Update UI elements safely
-            if (i < dateTextViews.length) {
-                dateTextViews[i].setText(dateText);
-                weatherTextViews[i].setText(weatherText);
-                tempTextViews[i].setText(highLowText);
-                forecastIcons[i].setImageResource(forecastIconResId);
-                // Make views visible
-                dateTextViews[i].setVisibility(TextView.VISIBLE);
-                weatherTextViews[i].setVisibility(TextView.VISIBLE);
-                tempTextViews[i].setVisibility(TextView.VISIBLE);
-                forecastIcons[i].setVisibility(ImageView.VISIBLE);
-            }
+            dateTextViews[i].setText(dateText);
+            weatherTextViews[i].setText(weatherText);
+            tempTextViews[i].setText(highLowText);
+            forecastIcons[i].setImageResource(forecastIconResId);
+            dateTextViews[i].setVisibility(TextView.VISIBLE);
+            weatherTextViews[i].setVisibility(TextView.VISIBLE);
+            tempTextViews[i].setVisibility(TextView.VISIBLE);
+            forecastIcons[i].setVisibility(ImageView.VISIBLE);
         }
-
-        // Hide unused forecast views
         for (int i = daysToDisplay; i < 7; i++) {
-            if (i < dateTextViews.length) {
-                dateTextViews[i].setVisibility(TextView.INVISIBLE);
-                weatherTextViews[i].setVisibility(TextView.INVISIBLE);
-                tempTextViews[i].setVisibility(TextView.INVISIBLE);
-                forecastIcons[i].setVisibility(ImageView.INVISIBLE);
+            if (dateTextViews[i] == null || weatherTextViews[i] == null || tempTextViews[i] == null || forecastIcons[i] == null) {
+                Log.w(TAG, "Skipping hide for forecast day " + (i+1) + " due to null view reference.");
+                continue;
             }
+            dateTextViews[i].setVisibility(TextView.INVISIBLE);
+            weatherTextViews[i].setVisibility(TextView.INVISIBLE);
+            tempTextViews[i].setVisibility(TextView.INVISIBLE);
+            forecastIcons[i].setVisibility(ImageView.INVISIBLE);
         }
-
-        // --- Pass data to the custom chart view ---
         if (weeklyChartView != null) {
-            // Pass only the relevant number of days (up to 7)
-            List<WeatherDailyBean.DailyBean> chartData = dailyList.subList(0, daysToDisplay);
-            weeklyChartView.setData(chartData);
+            if (daysToDisplay > 0) {
+                List<WeatherDailyBean.DailyBean> chartData = dailyList.subList(0, daysToDisplay);
+                weeklyChartView.setData(chartData);
+            } else {
+                weeklyChartView.setData(null);
+            }
         }
     }
 
-    /**
-     * Clear forecast views and the custom chart.
-     */
     private void clearForecastViews() {
-        // Clear today's high/low placeholder
-        textView5.setText("-°/-°");
-
-        // Prepare UI arrays
+        if (textView5 != null) textView5.setText("-°/-°");
         ImageView[] forecastIcons = {ivForecastIcon1, ivForecastIcon2, ivForecastIcon3, ivForecastIcon4, ivForecastIcon5, ivForecastIcon6, ivForecastIcon7};
         TextView[] dateTextViews = {textView_rq1, textView_rq2, textView_rq3, textView_rq4, textView_rq5, textView_rq6, textView_rq7};
         TextView[] weatherTextViews = {textView_xq1, textView_xq2, textView_xq3, textView_xq4, textView_xq5, textView_xq6, textView_xq7};
         TextView[] tempTextViews = {textView_gdi1, textView_gdi2, textView_gdi3, textView_gdi4, textView_gdi5, textView_gdi6, textView_gdi7};
 
-        // Set placeholders for forecast list
         for (int i = 0; i < 7; i++) {
-            if (i < dateTextViews.length) { // Boundary check
+            if (dateTextViews[i] != null && weatherTextViews[i] != null && tempTextViews[i] != null && forecastIcons[i] != null) {
                 dateTextViews[i].setText("-\n--");
                 weatherTextViews[i].setText("-");
                 tempTextViews[i].setText("-°/-°");
                 forecastIcons[i].setImageResource(getWeatherIconResource(null));
             }
         }
-
-        // --- Clear the custom chart view ---
         if (weeklyChartView != null) {
-            weeklyChartView.setData(null); // Pass null or an empty list to clear data
+            weeklyChartView.setData(null);
         }
     }
 
-    // --- Rest of the methods (setupSwipeRefresh, setupQWeatherSDK, initialWeatherLoad, fetchAllWeatherData, onApiCallComplete, getHourlyWeatherForecast, getRealtimeWeather, getDailyWeatherForecast, formatUpdateTime, getWeatherIconResource, initProvinceAndCityData, showProvinceSelection, showCitySelection, startTimeDisplay, updateChineseTime, onDestroy, displayHourlyWeather, dpToPx, getHourFromDateTime, getWeekDayFromDate, isNetworkAvailable) remain the same as your provided code ---
-    // ↓↓↓ Paste all those methods here ↓↓↓
-
-    /**
-     * 设置下拉刷新监听器和样式
-     */
     private void setupSwipeRefresh() {
-        // 设置下拉刷新的监听器
         swipeRefreshLayout.setOnRefreshListener(() -> {
             Log.d(TAG, "下拉刷新触发");
-            // 检查网络是否可用
             if (isNetworkAvailable()) {
-                // 网络可用，重置 API 调用计数器
                 Log.d(TAG, "开始刷新，需要完成 " + TOTAL_REFRESH_API_CALLS + " 个 API 调用");
-                pendingApiCallCount.set(TOTAL_REFRESH_API_CALLS); // 重置计数器
-                // 获取所有天气数据 (实时、7天、24小时)
+                pendingApiCallCount.set(TOTAL_REFRESH_API_CALLS);
                 fetchAllWeatherData();
-                // 注意：setRefreshing(true) 由 SwipeRefreshLayout 自动处理
             } else {
-                // 网络不可用，提示用户并立即停止刷新动画
                 Toast.makeText(MainActivity.this, "网络不可用，无法刷新", Toast.LENGTH_SHORT).show();
                 if (swipeRefreshLayout.isRefreshing()) {
                     swipeRefreshLayout.setRefreshing(false);
                 }
             }
         });
-
-        // 设置下拉刷新指示器的颜色方案
         swipeRefreshLayout.setColorSchemeResources(
                 android.R.color.holo_blue_bright,
                 android.R.color.holo_green_light,
@@ -335,128 +370,95 @@ public class MainActivity extends AppCompatActivity {
                 android.R.color.holo_red_light);
     }
 
-    /**
-     * 初始化和风天气 SDK 配置
-     */
     private void setupQWeatherSDK() {
-        // !!! 使用你自己的 Public ID 和 Key 替换 !!!
-        // 考虑将密钥存储在更安全的地方（例如 build.gradle 或 local.properties）
-        HeConfig.init("TG5A63RCBJ", "2e72f3dfa8a44362b4dd4187d6b25cf5"); // Replace with your keys
-        // 切换到开发版服务（发布时应切换到switchToProductionService()）
+        HeConfig.init("TG5A63RCBJ", "2e72f3dfa8a44362b4dd4187d6b25cf5");
         HeConfig.switchToDevService();
     }
 
-    /**
-     * 执行首次进入应用或城市切换后的初始天气数据加载
-     */
     private void initialWeatherLoad() {
-        // 检查网络连接
         if (!isNetworkAvailable()) {
             Toast.makeText(this, "网络连接不可用，请检查网络设置", Toast.LENGTH_LONG).show();
-            textView4.setText("网络连接不可用"); // 在更新时间处显示网络状态
-            clearForecastViews(); // Clear views if network unavailable
+            if (textView4 != null) textView4.setText("网络连接不可用");
+            clearForecastViews();
+            updateAirQualityUI(null);
+            updateWeatherAlertsUI(null);
         } else {
-            // 网络可用，设置当前地区名称
-            textView_diq.setText(currentLocationName);
-            // 手动启动加载指示器，模拟刷新过程
-            swipeRefreshLayout.setRefreshing(true);
-            // 设置 API 调用计数器，以便初始加载完成后也能停止指示器
+            if (textView_diq != null) textView_diq.setText(currentLocationName);
+            if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(true);
             pendingApiCallCount.set(TOTAL_REFRESH_API_CALLS);
-            // 获取所有天气数据
             fetchAllWeatherData();
         }
     }
 
-    /**
-     * 统一调用所有获取天气数据的 API
-     */
     private void fetchAllWeatherData() {
-        Log.d(TAG, "开始获取所有天气数据，城市 ID: " + currentLocationId);
-        getRealtimeWeather();       // 获取实时天气
-        getDailyWeatherForecast();  // 获取 7 天预报
-        getHourlyWeatherForecast(); // 获取 24 小时预报
+        Log.d(TAG, "开始获取所有天气数据 (5项)，城市 ID: " + currentLocationId);
+        getRealtimeWeather();
+        getDailyWeatherForecast();
+        getHourlyWeatherForecast();
+        getAirQualityData();
+        getWeatherAlerts();
     }
 
-    /**
-     * 每个 API 调用完成后的回调（无论成功或失败）。
-     * 递减计数器，并在计数器归零时停止刷新动画。
-     * 使用 AtomicInteger 保证线程安全。
-     */
     private synchronized void onApiCallComplete() {
-        int remaining = pendingApiCallCount.decrementAndGet(); // 原子递减并获取新值
+        int remaining = pendingApiCallCount.decrementAndGet();
         Log.d(TAG, "一个 API 调用完成，剩余: " + remaining);
-
-        // 当计数器小于等于 0 时，表示所有 API 都已返回结果
         if (remaining <= 0) {
-            // 确保停止刷新动画的操作在主线程执行
             handler.post(() -> {
                 if (swipeRefreshLayout != null && swipeRefreshLayout.isRefreshing()) {
-                    swipeRefreshLayout.setRefreshing(false); // 停止刷新动画
+                    swipeRefreshLayout.setRefreshing(false);
                     Log.d(TAG, "所有 API 调用完成，停止刷新动画");
-                    // 可以考虑只在用户手动触发刷新时显示此 Toast
-                    Toast.makeText(MainActivity.this, "刷新完成", Toast.LENGTH_SHORT).show();
                 }
             });
         }
     }
 
-    /**
-     * 获取未来 24 小时逐小时天气预报
-     */
     private void getHourlyWeatherForecast() {
         Log.d(TAG, "开始获取 24 小时预报 for " + currentLocationId);
         QWeather.getWeather24Hourly(this, currentLocationId, new QWeather.OnResultWeatherHourlyListener() {
             @Override
             public void onError(Throwable e) {
                 Log.e(TAG, "获取24小时天气预报失败: " + e.getMessage(), e);
-                // 确保 UI 更新和计数器操作在主线程
                 handler.post(() -> {
                     Toast.makeText(MainActivity.this, "获取24小时预报失败", Toast.LENGTH_SHORT).show();
-                    displayHourlyWeather(new ArrayList<>()); // 显示空状态或占位符
-                    onApiCallComplete(); // 标记此 API 调用完成
+                    displayHourlyWeather(new ArrayList<>());
+                    onApiCallComplete();
                 });
             }
-
             @Override
             public void onSuccess(WeatherHourlyBean weatherHourlyBean) {
                 Log.i(TAG, "获取24小时预报成功 - Code: " + weatherHourlyBean.getCode());
-                // 确保 UI 更新和计数器操作在主线程
                 handler.post(() -> {
                     if (Code.OK == weatherHourlyBean.getCode()) {
                         List<WeatherHourlyBean.HourlyBean> hourlyList = weatherHourlyBean.getHourly();
                         if (hourlyList != null) {
-                            displayHourlyWeather(hourlyList); // 显示逐小时预报
+                            displayHourlyWeather(hourlyList);
                         } else {
                             Log.w(TAG,"24小时预报数据列表为 null");
-                            displayHourlyWeather(new ArrayList<>()); // 显示空状态
+                            displayHourlyWeather(new ArrayList<>());
                         }
                     } else {
                         Log.e(TAG, "24小时预报API返回错误码: " + weatherHourlyBean.getCode());
                         Toast.makeText(MainActivity.this, "24小时预报错误:" + weatherHourlyBean.getCode(), Toast.LENGTH_SHORT).show();
-                        displayHourlyWeather(new ArrayList<>()); // 显示空状态
+                        displayHourlyWeather(new ArrayList<>());
                     }
-                    onApiCallComplete(); // 标记此 API 调用完成
+                    onApiCallComplete();
                 });
             }
         });
     }
 
-    /**
-     * 获取实时天气数据
-     */
     private void getRealtimeWeather() {
         Log.d(TAG, "开始获取实时天气 for " + currentLocationId);
         QWeather.getWeatherNow(this, currentLocationId, new QWeather.OnResultWeatherNowListener() {
             @Override
             public void onError(Throwable e) {
                 Log.e(TAG, "获取实时天气数据失败: " + e.getMessage(), e);
-                // 确保 UI 更新和计数器操作在主线程
                 handler.post(() -> {
-                    textView4.setText("获取实时天气失败");
-                    textView1.setText("-");
-                    textView2.setText("-°");
-                    textView3.setText("-%");
-                    ivCurrentWeatherIcon.setImageResource(getWeatherIconResource(null));
+                    if (textView4 != null) textView4.setText("获取实时天气失败");
+                    if (textView1 != null) textView1.setText("-");
+                    if (textView2 != null) textView2.setText("-°");
+                    if (textView3 != null) textView3.setText("-%");
+                    if (ivCurrentWeatherIcon != null) ivCurrentWeatherIcon.setImageResource(getWeatherIconResource(null));
                     Toast.makeText(MainActivity.this, "获取实时天气失败", Toast.LENGTH_SHORT).show();
                     onApiCallComplete();
                 });
@@ -474,19 +476,18 @@ public class MainActivity extends AppCompatActivity {
                         final String updateTime = now.getObsTime();
                         final int iconResId = getWeatherIconResource(weatherText);
 
-                        textView1.setText(weatherText);
-                        textView2.setText(temperature);
-                        textView3.setText(humidity);
-                        textView4.setText(formatUpdateTime(updateTime));
-                        ivCurrentWeatherIcon.setImageResource(iconResId);
+                        if (textView1 != null) textView1.setText(weatherText);
+                        if (textView2 != null) textView2.setText(temperature);
+                        if (textView3 != null) textView3.setText(humidity);
+                        if (textView4 != null) textView4.setText(formatUpdateTime(updateTime));
+                        if (ivCurrentWeatherIcon != null) ivCurrentWeatherIcon.setImageResource(iconResId);
                     } else {
                         Code code = weatherBean.getCode();
                         Log.e(TAG, "实时天气API返回错误码: " + code);
-                        textView4.setText("实时天气错误: " + code);
-                        textView1.setText("-");
-                        textView2.setText("-°");
-                        textView3.setText("-%");
-                        ivCurrentWeatherIcon.setImageResource(getWeatherIconResource(null));
+                        if (textView1 != null) textView1.setText("-");
+                        if (textView2 != null) textView2.setText("-°");
+                        if (textView3 != null) textView3.setText("-%");
+                        if (ivCurrentWeatherIcon != null) ivCurrentWeatherIcon.setImageResource(getWeatherIconResource(null));
                         Toast.makeText(MainActivity.this, "实时天气错误:" + code, Toast.LENGTH_SHORT).show();
                     }
                     onApiCallComplete();
@@ -495,9 +496,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * 获取未来 7 天天气预报
-     */
     private void getDailyWeatherForecast() {
         Log.d(TAG, "开始获取 7 天预报 for " + currentLocationId);
         QWeather.getWeather7D(this, currentLocationId, new QWeather.OnResultWeatherDailyListener() {
@@ -518,7 +516,7 @@ public class MainActivity extends AppCompatActivity {
                     if (Code.OK == weatherDailyBean.getCode()) {
                         final List<WeatherDailyBean.DailyBean> dailyList = weatherDailyBean.getDaily();
                         if (dailyList != null && !dailyList.isEmpty()) {
-                            updateDailyForecastUI(dailyList); // This now updates the chart too
+                            updateDailyForecastUI(dailyList);
                         } else {
                             Log.w(TAG, "7天预报数据列表为空或null");
                             Toast.makeText(MainActivity.this, "未获取到7天预报数据", Toast.LENGTH_SHORT).show();
@@ -536,11 +534,101 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * 格式化从 API 获取的更新时间字符串 (ISO 8601格式)
-     * @param obsTime API 返回的原始时间字符串，例如 "2023-10-27T15:40+08:00"
-     * @return 格式化后的时间字符串，例如 "15:40 更新" 或错误提示
-     */
+    private void getAirQualityData() {
+        Log.d(TAG, "开始获取空气质量 for " + currentLocationId);
+        QWeather.getAirNow(this, currentLocationId, Lang.ZH_HANS, new QWeather.OnResultAirNowListener() {
+            @Override
+            public void onError(Throwable e) {
+                Log.e(TAG, "获取空气质量失败: " + e.getMessage(), e);
+                handler.post(() -> {
+                    Toast.makeText(MainActivity.this, "获取空气质量失败", Toast.LENGTH_SHORT).show();
+                    updateAirQualityUI(null);
+                    onApiCallComplete();
+                });
+            }
+
+            @Override
+            public void onSuccess(AirNowBean airNowBean) {
+                Log.i(TAG, "获取空气质量成功 - Code: " + airNowBean.getCode());
+                handler.post(() -> {
+                    if (Code.OK == airNowBean.getCode() && airNowBean.getNow() != null) {
+                        updateAirQualityUI(airNowBean.getNow());
+                    } else {
+                        Code code = airNowBean.getCode();
+                        Log.e(TAG, "空气质量API返回错误码: " + code);
+                        Toast.makeText(MainActivity.this, "空气质量错误:" + code, Toast.LENGTH_SHORT).show();
+                        updateAirQualityUI(null);
+                    }
+                    onApiCallComplete();
+                });
+            }
+        });
+    }
+
+    private void getWeatherAlerts() {
+        Log.d(TAG, "开始获取天气预警 for " + currentLocationId);
+        QWeather.getWarning(this, currentLocationId, new QWeather.OnResultWarningListener() {
+            @Override
+            public void onError(Throwable e) {
+                Log.e(TAG, "获取天气预警失败: " + e.getMessage(), e);
+                handler.post(() -> {
+                    Toast.makeText(MainActivity.this, "获取天气预警失败", Toast.LENGTH_SHORT).show();
+                    updateWeatherAlertsUI(null);
+                    onApiCallComplete();
+                });
+            }
+
+            @Override
+            public void onSuccess(WarningBean warningBean) {
+                Log.i(TAG, "获取天气预警成功 - Code: " + warningBean.getCode());
+                handler.post(() -> {
+                    if (Code.OK == warningBean.getCode()) {
+                        List<WarningBean.WarningBeanBase> warningList = warningBean.getWarningList();
+                        updateWeatherAlertsUI(warningList);
+                    } else {
+                        Code code = warningBean.getCode();
+                        Log.e(TAG, "天气预警API返回错误码: " + code);
+                        Toast.makeText(MainActivity.this, "天气预警错误:" + code, Toast.LENGTH_SHORT).show();
+                        updateWeatherAlertsUI(null);
+                    }
+                    onApiCallComplete();
+                });
+            }
+        });
+    }
+
+    private void updateWeatherAlertsUI(@Nullable List<WarningBean.WarningBeanBase> warnings) {
+        if (tvNoAlerts == null || tvAlertTitle == null || tvAlertText == null) return;
+
+        if (warnings == null) {
+            tvNoAlerts.setVisibility(View.VISIBLE);
+            tvNoAlerts.setText("获取预警失败");
+            tvAlertTitle.setVisibility(View.GONE);
+            tvAlertText.setVisibility(View.GONE);
+        } else if (warnings.isEmpty()) {
+            tvNoAlerts.setVisibility(View.VISIBLE);
+            tvNoAlerts.setText("暂无预警");
+            tvAlertTitle.setVisibility(View.GONE);
+            tvAlertText.setVisibility(View.GONE);
+        } else {
+            tvNoAlerts.setVisibility(View.GONE);
+            tvAlertTitle.setVisibility(View.VISIBLE);
+            tvAlertText.setVisibility(View.VISIBLE);
+
+            WarningBean.WarningBeanBase firstWarning = warnings.get(0);
+            String typeName = firstWarning.getTypeName();
+            String severity = firstWarning.getSeverity();
+            String textContent = firstWarning.getText();
+            String titleConstructed = (typeName != null ? typeName : "")
+                    + " "
+                    + (severity != null ? severity : "")
+                    + "预警";
+            tvAlertTitle.setText(titleConstructed.trim());
+            String textToDisplay = textContent != null ? textContent : "详情未知";
+            tvAlertText.setText(textToDisplay);
+        }
+    }
+
     private String formatUpdateTime(String obsTime) {
         if (obsTime == null) return "未知时间";
         try {
@@ -562,11 +650,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 根据天气描述文本获取对应的天气图标资源 ID
-     * @param weatherText 天气描述，例如 "晴", "多云", "小雨"
-     * @return 对应的 drawable 资源 ID，如果没有匹配则返回默认图标
-     */
     private int getWeatherIconResource(String weatherText) {
         if (weatherText == null) {
             return R.drawable.sun_2;
@@ -583,8 +666,8 @@ public class MainActivity extends AppCompatActivity {
         if (weatherText.contains("小雪")) return R.drawable.xue;
         if (weatherText.contains("雪")) return R.drawable.xiuxuer_1;
         if (weatherText.contains("霾")) return R.drawable.mai;
-        if (weatherText.contains("雾")) return R.drawable.wu;
         if (weatherText.contains("沙尘")) return R.drawable.mai;
+        if (weatherText.contains("雾")) return R.drawable.wu;
         if (weatherText.contains("多云")) return R.drawable.dyun_1;
         if (weatherText.contains("阴")) return R.drawable.yin;
         if (weatherText.contains("晴")) return R.drawable.sun_2;
@@ -592,9 +675,6 @@ public class MainActivity extends AppCompatActivity {
         return R.drawable.sun_2;
     }
 
-    /**
-     * 从 R.raw.province_city 文件加载省市数据到 provinceAndCityMap
-     */
     private void initProvinceAndCityData() {
         provinceAndCityMap = new HashMap<>();
         InputStream inputStream = null;
@@ -643,9 +723,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 显示省份选择对话框
-     */
     private void showProvinceSelection() {
         if (provinceAndCityMap == null || provinceAndCityMap.isEmpty()) {
             Log.w(TAG, "尝试显示省份选择时，省份数据为 null 或空。");
@@ -667,10 +744,6 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    /**
-     * 根据选择的省份显示城市选择对话框
-     * @param province 选中的省份名称
-     */
     private void showCitySelection(final String province) {
         if (provinceAndCityMap == null || !provinceAndCityMap.containsKey(province)) {
             Log.e(TAG, "找不到所选省份的城市数据: " + province);
@@ -700,7 +773,11 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "已选择城市: " + selectedCity + ", ID: " + cityId);
             currentLocationId = cityId;
             currentLocationName = selectedCity;
-            textView_diq.setText(currentLocationName);
+            if (textView_diq != null) textView_diq.setText(currentLocationName);
+            clearForecastViews();
+            updateAirQualityUI(null);
+            updateWeatherAlertsUI(null);
+            if (textView4 != null) textView4.setText("加载中...");
             if (swipeRefreshLayout != null) {
                 swipeRefreshLayout.setRefreshing(true);
             }
@@ -712,9 +789,6 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    /**
-     * 启动定时器，用于更新界面上的时间显示
-     */
     private void startTimeDisplay() {
         if (timer != null) {
             timer.cancel();
@@ -726,12 +800,9 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 handler.post(() -> updateChineseTime());
             }
-        }, 0, 60000); // Update every minute
+        }, 0, 60000);
     }
 
-    /**
-     * 更新界面上的中国时间显示 (格式: MM-dd HH:mm)
-     */
     private void updateChineseTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
         sdf.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
@@ -741,7 +812,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // 活动销毁时的回调
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -752,10 +822,6 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacksAndMessages(null);
     }
 
-    /**
-     * 动态创建并显示逐小时天气预报视图
-     * @param hourlyList 逐小时预报数据列表
-     */
     private void displayHourlyWeather(List<WeatherHourlyBean.HourlyBean> hourlyList) {
         LinearLayout llHourlyWeather = findViewById(R.id.ll_hourly_weather);
         if (llHourlyWeather == null) {
@@ -768,7 +834,7 @@ public class MainActivity extends AppCompatActivity {
             TextView tvNoData = new TextView(this);
             tvNoData.setText("暂无逐小时预报");
             tvNoData.setGravity(Gravity.CENTER);
-            tvNoData.setTextColor(ContextCompat.getColor(this, android.R.color.white)); // White text
+            tvNoData.setTextColor(ContextCompat.getColor(this, android.R.color.white));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             params.setMargins(0, dpToPx(16), 0, dpToPx(16));
@@ -791,7 +857,7 @@ public class MainActivity extends AppCompatActivity {
             tvTime.setText(getHourFromDateTime(hourly.getFxTime()));
             tvTime.setGravity(Gravity.CENTER);
             tvTime.setTextSize(12);
-            tvTime.setTextColor(ContextCompat.getColor(this, android.R.color.white)); // White text
+            tvTime.setTextColor(ContextCompat.getColor(this, android.R.color.white));
             itemLayout.addView(tvTime);
 
             ImageView ivHourlyIcon = new ImageView(this);
@@ -811,27 +877,17 @@ public class MainActivity extends AppCompatActivity {
             tvTemp.setGravity(Gravity.CENTER);
             tvTemp.setTextSize(14);
             tvTemp.setTypeface(null, android.graphics.Typeface.BOLD);
-            tvTemp.setTextColor(ContextCompat.getColor(this, android.R.color.white)); // White text
+            tvTemp.setTextColor(ContextCompat.getColor(this, android.R.color.white));
             itemLayout.addView(tvTemp);
 
             llHourlyWeather.addView(itemLayout);
         }
     }
 
-    /**
-     * 辅助方法：将 dp 单位转换为像素 (px)
-     * @param dp dp 值
-     * @return 对应的像素值
-     */
     private int dpToPx(int dp) {
         return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    /**
-     * 辅助方法：从 ISO 8601 格式的日期时间字符串中提取小时和分钟 (HH:mm)
-     * @param dateTime 输入的日期时间字符串，例如 "2023-10-27T15:00+08:00"
-     * @return 格式化后的 "HH:mm" 字符串，或解析失败时返回 "--:--"
-     */
     private String getHourFromDateTime(String dateTime) {
         if (dateTime == null) return "--:--";
         try {
@@ -851,11 +907,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 辅助方法：根据 Date 对象获取对应的星期描述 ("今天", "明天", 或 "周X")
-     * @param date 需要判断的日期对象
-     * @return 对应的星期字符串
-     */
     private String getWeekDayFromDate(Date date) {
         if (date == null) return "";
         Calendar calendar = Calendar.getInstance();
@@ -875,11 +926,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
-    /**
-     * 检查设备当前网络是否可用
-     * @return true 如果网络连接可用，否则 false
-     */
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         if (connectivityManager == null) {
@@ -891,6 +937,4 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "网络是否可用: " + isConnected);
         return isConnected;
     }
-
-    // ↑↑↑ End of MainActivity class ↑↑↑
 }
