@@ -1,4 +1,4 @@
-ANDROID 天气预报应用 (WEATHER FORECAST APP)
+Android 天气预报应用 (WEATHER FORECAST APP)
 ================================================
 
 这是一个基于 Android 平台开发的天气预报应用程序，使用和风天气 (QWeather) SDK 获取数据，旨在提供实时、准确的天气信息。
